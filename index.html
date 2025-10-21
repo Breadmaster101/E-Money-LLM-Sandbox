@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Money LLM Sandbox</title>
+    <style>
+        :root {
+            --bg-color: #1e1e20;
+            --sidebar-color: #252628;
+            --chat-area-color: #2f3133;
+            --message-user-bg: #2a52be;
+            --message-bot-bg: #404245;
+            --text-primary: #e2e2e3;
+            --text-secondary: #a0a2a5;
+            --border-color: #44474a;
+            --accent-color: #3a76f8;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #chat-ui-container {
+            display: flex;
+            width: 100vw;
+            height: 100vh;
+            background-color: var(--sidebar-color);
+            overflow: hidden;
+        }
+
+        #sidebar {
+            width: 260px;
+            background-color: var(--sidebar-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.5em;
+            margin: 0 0 25px 0;
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        #new-chat-button {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            background-color: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95em;
+            text-align: left;
+            width: 100%;
+            margin-bottom: 30px;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+
+        #new-chat-button:hover:not(:disabled) {
+            background-color: rgba(255, 255, 255, 0.05);
+            border-color: #555;
+        }
+
+        #new-chat-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #new-chat-button svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        #model-info {
+            border-top: 1px solid var(--border-color);
+            padding-top: 20px;
+        }
+        #model-info h3 {
+            font-size: 0.8em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin: 0 0 10px 0;
+        }
+        #model-info p {
+            font-size: 0.9em;
+            background-color: var(--chat-area-color);
+            padding: 8px 12px;
+            border-radius: 6px;
+            word-break: break-all;
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        #status-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--border-color);
+            padding-top: 15px;
+        }
+        #status {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        #chat-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--chat-area-color);
+        }
+
+        #chat-log {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 2rem 2.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .message {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            max-width: 85%;
+            word-wrap: break-word;
+            line-height: 1.6;
+        }
+        
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .message-content {
+            padding: 12px 18px;
+            border-radius: 18px;
+            position: relative;
+        }
+
+        .user-message {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+        .user-message .message-avatar { background-color: #6d8cce; }
+        .user-message .message-content { background-color: var(--message-user-bg); border-bottom-right-radius: 6px;}
+
+        .bot-message {
+            align-self: flex-start;
+        }
+        .bot-message .message-avatar { background-color: #7d8084; }
+        .bot-message .message-content { background-color: var(--message-bot-bg); border-bottom-left-radius: 6px;}
+        .bot-message > div.bot-content-wrapper { white-space: pre-wrap; }
+
+        .tps-metric {
+            position: absolute;
+            bottom: 6px;
+            right: 12px;
+            font-size: 0.7em;
+            color: var(--text-secondary);
+            background-color: rgba(0,0,0,0.2);
+            padding: 1px 5px;
+            border-radius: 4px;
+        }
+
+        .bot-message .thought-block { margin: 12px 0 5px 0; }
+        .bot-message .thought-block summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: #d0d0d0;
+            margin-bottom: 8px;
+            padding: 6px 10px;
+            background-color: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            display: inline-block;
+            outline: none;
+            transition: background-color 0.2s ease;
+        }
+        .bot-message .thought-block summary:hover { background-color: rgba(255,255,255,0.1); }
+        .bot-message .thought-block div.thought-content {
+            padding: 12px;
+            border: 1px dashed #666;
+            background-color: rgba(0,0,0,0.15);
+            margin-top: 4px;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            font-size: 0.9em;
+            color: #ccc;
+        }
+        
+        #input-container {
+            padding: 1.5rem 2.5rem;
+            border-top: 1px solid var(--border-color);
+            background-color: var(--chat-area-color);
+        }
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            background-color: var(--message-bot-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            transition: border-color 0.2s;
+        }
+        .input-wrapper:focus-within {
+             border-color: var(--accent-color);
+             box-shadow: 0 0 0 2px rgba(58, 118, 248, 0.3);
+        }
+
+        #user-input {
+            flex-grow: 1;
+            padding: 14px 60px 14px 20px;
+            border: none;
+            font-size: 1em;
+            background-color: transparent;
+            color: var(--text-primary);
+            resize: none;
+            outline: none;
+            max-height: 200px;
+            overflow-y: auto;
+            line-height: 1.5;
+        }
+        #user-input::placeholder { color: #888; }
+        
+        #send-button {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 36px;
+            height: 36px;
+            padding: 8px;
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.2s ease;
+        }
+        #send-button:hover:not(:disabled) { background-color: #2a66e4; }
+        #send-button:disabled { background-color: #555; cursor: not-allowed; }
+        #send-button svg { width: 100%; height: 100%; }
+    </style>
+</head>
+<body>
+    <div id="chat-ui-container">
+        <aside id="sidebar">
+            <div class="sidebar-header">
+                <h1>E-Money LLM Sandbox</h1>
+            </div>
+            <button id="new-chat-button" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                <span>New Chat</span>
+            </button>
+            <div id="model-info">
+                <h3>MODEL IN USE</h3>
+                <p id="model-name-display">Loading...</p>
+                <p style="font-size: 0.8em; background: none; padding: 10px 0 0 0; color: var(--text-secondary);">
+                    First load downloads weights (~1.0GB). Runs entirely in your browser.
+                </p>
+            </div>
+            <div id="status-footer">
+                <div id="status">Initializing WebLLM...</div>
+            </div>
+        </aside>
+
+        <main id="chat-area">
+            <div id="chat-log">
+            </div>
+            <div id="input-container">
+                <div class="input-wrapper">
+                    <textarea id="user-input" placeholder="Type your message... (Shift+Enter for newline)" disabled rows="1"></textarea>
+                    <button id="send-button" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { CreateMLCEngine, prebuiltAppConfig } from "https://esm.run/@mlc-ai/web-llm";
+
+        const statusDiv = document.getElementById('status');
+        const chatLog = document.getElementById('chat-log');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        const modelNameDisplay = document.getElementById('model-name-display');
+        const newChatButton = document.getElementById('new-chat-button');
+
+        const targetModelId = "Qwen3-1.7B-q4f16_1-MLC";
+        const botDisplayName = "E-Money AI Sandbox";
+        let engine;
+        let conversationHistory = [];
+
+        modelNameDisplay.textContent = targetModelId;
+
+        function appendMessage(text, sender) {
+            const messageWrapper = document.createElement('div');
+            messageWrapper.classList.add('message', sender === 'user' ? 'user-message' : 'bot-message');
+
+            const avatar = document.createElement('div');
+            avatar.classList.add('message-avatar');
+            avatar.textContent = sender === 'user' ? 'U' : 'AI';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.classList.add('message-content');
+            
+            messageWrapper.appendChild(avatar);
+            messageWrapper.appendChild(contentDiv);
+
+            if (sender === 'bot') {
+                const contentWrapper = document.createElement('div');
+                contentWrapper.classList.add('bot-content-wrapper');
+                contentDiv.appendChild(contentWrapper);
+                
+                const tpsMetricSpan = document.createElement('span');
+                tpsMetricSpan.classList.add('tps-metric');
+                contentDiv.appendChild(tpsMetricSpan);
+
+                if (text === "Thinking...") {
+                    const initialSpan = document.createElement('span');
+                    initialSpan.textContent = text;
+                    contentWrapper.appendChild(initialSpan);
+                }
+            } else {
+                contentDiv.textContent = text;
+            }
+            
+            chatLog.appendChild(messageWrapper);
+            chatLog.scrollTop = chatLog.scrollHeight;
+            return messageWrapper;
+        }
+
+        async function initWebLLM() {
+            try {
+                const availableIds = prebuiltAppConfig.model_list.map(m => m.model_id);
+                if (!availableIds.includes(targetModelId)) {
+                    const errorMsg = `Critical: Model ID "${targetModelId}" not in prebuilt list.`;
+                    statusDiv.textContent = errorMsg; console.error(errorMsg); alert(errorMsg);
+                    return;
+                }
+                
+                statusDiv.textContent = `Loading model: ${targetModelId}...`;
+                const initProgressCallback = (report) => { statusDiv.textContent = report.text; };
+                engine = await CreateMLCEngine(targetModelId, { initProgressCallback });
+                
+                statusDiv.textContent = `Model ${targetModelId} loaded! Ready.`;
+                userInput.disabled = false; 
+                sendButton.disabled = false;
+                newChatButton.disabled = false;
+                userInput.placeholder = `Ask ${botDisplayName}... (Shift+Enter for newline)`;
+                console.log("WebLLM MLCEngine initialized:", targetModelId);
+
+            } catch (err) {
+                statusDiv.textContent = `Error initializing: ${err.message}`;
+                console.error("WebLLM Init Error:", err);
+                alert(`Load failed: ${err.message}\nModel: ${targetModelId}`);
+            }
+        }
+        
+        async function handleResetChat() {
+            if (!engine) return;
+            console.log("Resetting chat...");
+            userInput.disabled = true;
+            sendButton.disabled = true;
+            newChatButton.disabled = true;
+
+            chatLog.innerHTML = '';
+            conversationHistory = [];
+
+            try {
+                await engine.reset();
+                statusDiv.textContent = `Chat reset. Model is ready.`;
+                console.log("Engine chat state reset successfully.");
+            } catch (err) {
+                console.error("Error during engine.reset():", err);
+                statusDiv.textContent = `Error resetting chat. Model is ready.`;
+            } finally {
+                userInput.disabled = false;
+                sendButton.disabled = false;
+                newChatButton.disabled = false;
+                userInput.focus();
+            }
+        }
+
+        async function handleSendMessage() {
+            const messageText = userInput.value.trim();
+            if (!messageText || !engine) return;
+
+            appendMessage(messageText, 'user');
+            userInput.value = '';
+            userInput.style.height = 'auto';
+
+            let currentMessages = [...conversationHistory, { role: "user", content: messageText }];
+            userInput.disabled = true; sendButton.disabled = true; newChatButton.disabled = true;
+
+            let botMessageWrapper = appendMessage("Thinking...", 'bot');
+            let botContentWrapper = botMessageWrapper.querySelector('.bot-content-wrapper');
+            botContentWrapper.innerHTML = '';
+            let tpsDisplayElement = botMessageWrapper.querySelector('.tps-metric');
+            if (tpsDisplayElement) tpsDisplayElement.textContent = ""; 
+
+            let botReplyFullText = "";
+            let streamBuffer = "";
+            let inThinkBlock = false;
+            let currentActiveElement = null;
+            let startTime = 0;
+
+            function ensureNormalTextSpan() {
+                if (!currentActiveElement || currentActiveElement.tagName !== 'SPAN' || currentActiveElement.parentElement !== botContentWrapper) {
+                    const newSpan = document.createElement('span');
+                    botContentWrapper.appendChild(newSpan);
+                    currentActiveElement = newSpan;
+                }
+            }
+            ensureNormalTextSpan();
+
+            try {
+                const chunks = await engine.chat.completions.create({
+                    messages: currentMessages,
+                    stream: true,
+                    stream_options: { include_usage: true }
+                });
+
+                for await (const chunk of chunks) {
+                    if (startTime === 0) { startTime = performance.now(); }
+                    const delta = chunk.choices[0]?.delta?.content || "";
+                    
+                    if (delta) { 
+                        botReplyFullText += delta;
+                        streamBuffer += delta;
+                        
+                        let processAgain = true;
+                        while (processAgain) {
+                            processAgain = false;
+                            if (inThinkBlock) {
+                                const thinkCloseIndex = streamBuffer.indexOf("</think>");
+                                if (thinkCloseIndex !== -1) {
+                                    const thoughtText = streamBuffer.substring(0, thinkCloseIndex);
+                                    if (currentActiveElement && currentActiveElement.classList.contains('thought-content')) {
+                                         currentActiveElement.textContent += thoughtText;
+                                    }
+                                    streamBuffer = streamBuffer.substring(thinkCloseIndex + "</think>".length);
+                                    inThinkBlock = false; ensureNormalTextSpan(); processAgain = streamBuffer.length > 0;
+                                } else {
+                                    if (currentActiveElement && currentActiveElement.classList.contains('thought-content')) {
+                                         currentActiveElement.textContent += streamBuffer;
+                                    }
+                                    streamBuffer = "";
+                                }
+                            } else {
+                                const thinkOpenIndex = streamBuffer.indexOf("<think>");
+                                if (thinkOpenIndex !== -1) {
+                                    const normalText = streamBuffer.substring(0, thinkOpenIndex);
+                                    ensureNormalTextSpan(); currentActiveElement.textContent += normalText;
+                                    
+                                    const details = document.createElement('details'); details.classList.add('thought-block'); details.open = true;
+                                    const summary = document.createElement('summary'); 
+                                    summary.textContent = 'Show/Hide Thought Process';
+                                    const thoughtDiv = document.createElement('div'); thoughtDiv.classList.add('thought-content');
+                                    details.appendChild(summary); details.appendChild(thoughtDiv);
+                                    botContentWrapper.appendChild(details); currentActiveElement = thoughtDiv;
+                                    streamBuffer = streamBuffer.substring(thinkOpenIndex + "<think>".length);
+                                    inThinkBlock = true; processAgain = streamBuffer.length > 0;
+                                } else {
+                                    ensureNormalTextSpan(); currentActiveElement.textContent += streamBuffer;
+                                    streamBuffer = "";
+                                }
+                            }
+                        }
+                    }
+                    if (chunk.usage && tpsDisplayElement) {
+                        const endTime = performance.now();
+                        const totalElapsedTime = (endTime - startTime) / 1000;
+                        const tokens = chunk.usage.completion_tokens;
+                        if (tokens > 1 && totalElapsedTime > 0.1) {
+                             const tps = (tokens / totalElapsedTime).toFixed(1);
+                             tpsDisplayElement.textContent = `${tps} tk/s`;
+                        }
+                    }
+                    chatLog.scrollTop = chatLog.scrollHeight;
+                } 
+
+                if (engine && typeof engine.runtimeStatsText === 'function' && tpsDisplayElement) {
+                    const stats = await engine.runtimeStatsText();
+                    const decodeSpeedMatch = stats.match(/decoding:\s*(\d+\.?\d*)\s*tokens\/sec/i);
+                    if (decodeSpeedMatch && decodeSpeedMatch[1]) {
+                        tpsDisplayElement.textContent = `Avg: ${parseFloat(decodeSpeedMatch[1]).toFixed(1)} tk/s`;
+                    }
+                }
+
+                if (botReplyFullText) {
+                    conversationHistory.push({ role: "user", content: messageText });
+                    conversationHistory.push({ role: "assistant", content: botReplyFullText });
+                } else if (botContentWrapper.innerHTML === '') {
+                     ensureNormalTextSpan();
+                     currentActiveElement.textContent = "[No response generated]";
+                }
+            } catch (err) {
+                console.error("Generation Error:", err);
+                if (tpsDisplayElement) tpsDisplayElement.textContent = "Error";
+                ensureNormalTextSpan();
+                currentActiveElement.textContent += "\nSorry, an error occurred during generation.";
+            } finally {
+                userInput.disabled = false; 
+                sendButton.disabled = false;
+                newChatButton.disabled = false;
+                userInput.focus();
+            }
+        }
+        
+        userInput.addEventListener('input', () => {
+            userInput.style.height = 'auto';
+            userInput.style.height = (userInput.scrollHeight) + 'px';
+        });
+
+        newChatButton.addEventListener('click', handleResetChat);
+        sendButton.addEventListener('click', handleSendMessage);
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !sendButton.disabled) {
+                e.preventDefault();
+                handleSendMessage();
+            }
+        });
+
+        initWebLLM();
+    </script>
+</body>
+</html>
