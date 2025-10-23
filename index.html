@@ -15,6 +15,8 @@
             --text-secondary: #a0a2a5;
             --border-color: #44474a;
             --accent-color: #3a76f8;
+            --danger-color: #d9534f;
+            --danger-hover-color: #c9302c;
         }
 
         body {
@@ -94,14 +96,67 @@
             color: var(--text-secondary);
             margin: 0 0 10px 0;
         }
-        #model-info p {
-            font-size: 0.9em;
-            background-color: var(--chat-area-color);
+        
+        #model-selector {
+            width: 100%;
             padding: 8px 12px;
+            background-color: var(--chat-area-color);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
             border-radius: 6px;
-            word-break: break-all;
-            margin: 0;
-            line-height: 1.4;
+            font-size: 0.9em;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22%23a0a2a5%22%3E%3Cpath%20fill-rule%3D%22evenodd%22%20d%3D%22M5.293%207.293a1%201%200%20011.414%200L10%2010.586l3.293-3.293a1%201%200%20111.414%201.414l-4%204a1%201%200%2001-1.414%200l-4-4a1%201%200%20010-1.414z%22%20clip-rule%3D%22evenodd%22%20%2F%3E%3C%2Fsvg%3E');
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 1.2em;
+            padding-right: 30px;
+            margin-bottom: 12px;
+        }
+
+        #model-selector:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: #3a3c3e;
+        }
+        
+        #load-model-button {
+            width: 100%;
+            padding: 10px;
+            font-size: 0.95em;
+            font-weight: 500;
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        #load-model-button:hover:not(:disabled) { background-color: #2a66e4; }
+        #load-model-button:disabled { 
+            background-color: #555; 
+            cursor: not-allowed; 
+            opacity: 0.7;
+        }
+        
+        #load-model-button.unload-style {
+            background-color: var(--danger-color);
+        }
+        #load-model-button.unload-style:hover:not(:disabled) {
+            background-color: var(--danger-hover-color);
+        }
+
+        .thinking-toggle {
+            display: flex;
+            align-items: center;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+        .thinking-toggle label {
+            margin-left: 8px;
+            cursor: pointer;
         }
 
         #status-footer {
@@ -241,6 +296,7 @@
             max-height: 200px;
             overflow-y: auto;
             line-height: 1.5;
+            box-sizing: border-box; 
         }
         #user-input::placeholder { color: #888; }
         
@@ -273,21 +329,29 @@
             <div class="sidebar-header">
                 <h1>E-Money LLM Sandbox</h1>
             </div>
-            <button id="new-chat-button" disabled>
+            <button id="new-chat-button">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
                 <span>New Chat</span>
             </button>
             <div id="model-info">
-                <h3>MODEL IN USE</h3>
-                <p id="model-name-display">Loading...</p>
+                <h3>Select Model</h3>
+                <select id="model-selector">
+                    <option value="Qwen3-1.7B-q4f16_1-MLC">Qwen3 1.7B (Quality)</option>
+                    <option value="Qwen3-0.6B-q4f16_1-MLC">Qwen3 0.6B (Speed)</option>
+                </select>
+                <button id="load-model-button">Load Model</button>
+                <div class="thinking-toggle">
+                    <input type="checkbox" id="thinking-mode" name="thinking-mode">
+                    <label for="thinking-mode">Enable Thinking</label>
+                </div>
                 <p style="font-size: 0.8em; background: none; padding: 10px 0 0 0; color: var(--text-secondary);">
-                    First load downloads weights (~1.0GB). Runs entirely in your browser.
+                    First load downloads weights. Runs entirely in your browser.
                 </p>
             </div>
             <div id="status-footer">
-                <div id="status">Initializing WebLLM...</div>
+                <div id="status">Select a model to begin</div>
             </div>
         </aside>
 
@@ -296,7 +360,7 @@
             </div>
             <div id="input-container">
                 <div class="input-wrapper">
-                    <textarea id="user-input" placeholder="Type your message... (Shift+Enter for newline)" disabled rows="1"></textarea>
+                    <textarea id="user-input" placeholder="Load a model to start chatting..." disabled rows="1"></textarea>
                     <button id="send-button" disabled>
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
@@ -314,15 +378,72 @@
         const chatLog = document.getElementById('chat-log');
         const userInput = document.getElementById('user-input');
         const sendButton = document.getElementById('send-button');
-        const modelNameDisplay = document.getElementById('model-name-display');
         const newChatButton = document.getElementById('new-chat-button');
+        const modelSelector = document.getElementById('model-selector');
+        const loadModelButton = document.getElementById('load-model-button');
+        const thinkingModeCheckbox = document.getElementById('thinking-mode');
 
-        const targetModelId = "Qwen3-1.7B-q4f16_1-MLC";
-        const botDisplayName = "E-Money AI Sandbox";
+        const botDisplayName = "E-Money LLM Sandbox";
         let engine;
         let conversationHistory = [];
+        let currentlyLoadedModelId = null;
 
-        modelNameDisplay.textContent = targetModelId;
+        function updateLoadButtonState() {
+            loadModelButton.classList.remove('unload-style');
+            if (!currentlyLoadedModelId) {
+                loadModelButton.textContent = 'Load Model';
+                loadModelButton.disabled = false;
+            } else {
+                const selectedModelId = modelSelector.value;
+                if (selectedModelId === currentlyLoadedModelId) {
+                    loadModelButton.textContent = 'Unload Model';
+                    loadModelButton.classList.add('unload-style');
+                    loadModelButton.disabled = false;
+                } else {
+                    loadModelButton.textContent = 'Switch Model';
+                    loadModelButton.disabled = false;
+                }
+            }
+        }
+
+        function setApplicationState(state) {
+            switch (state) {
+                case 'unloaded':
+                    userInput.disabled = true;
+                    sendButton.disabled = true;
+                    newChatButton.disabled = true;
+                    modelSelector.disabled = false;
+                    currentlyLoadedModelId = null;
+                    updateLoadButtonState();
+                    statusDiv.textContent = 'Select a model and click "Load Model"';
+                    userInput.placeholder = 'Load a model to start chatting...';
+                    break;
+                case 'loading':
+                    userInput.disabled = true;
+                    sendButton.disabled = true;
+                    newChatButton.disabled = true;
+                    modelSelector.disabled = true;
+                    loadModelButton.disabled = true;
+                    loadModelButton.classList.remove('unload-style');
+                    loadModelButton.textContent = 'Loading...';
+                    break;
+                case 'generating':
+                    userInput.disabled = true;
+                    sendButton.disabled = true;
+                    newChatButton.disabled = true;
+                    modelSelector.disabled = true; 
+                    loadModelButton.disabled = true;
+                    break;
+                case 'ready':
+                    userInput.disabled = false;
+                    sendButton.disabled = false;
+                    newChatButton.disabled = false;
+                    modelSelector.disabled = false;
+                    userInput.placeholder = `Ask ${botDisplayName}...`;
+                    updateLoadButtonState();
+                    break;
+            }
+        }
 
         function appendMessage(text, sender) {
             const messageWrapper = document.createElement('div');
@@ -361,39 +482,75 @@
             return messageWrapper;
         }
 
+        async function handleUnloadModel() {
+            if (!engine) return;
+            console.log("Unloading model...");
+            setApplicationState('loading');
+            statusDiv.textContent = 'Unloading current model...';
+            userInput.value = '';
+            userInput.style.height = 'auto';
+
+
+            try {
+                await engine.unload();
+                engine = null;
+                console.log('Model unloaded successfully.');
+                chatLog.innerHTML = '';
+                conversationHistory = [];
+                setApplicationState('unloaded');
+            } catch (err) {
+                console.error("Model unload error:", err);
+                statusDiv.textContent = `Error unloading: ${err.message}`;
+                setApplicationState('ready');
+            }
+        }
+        
         async function initWebLLM() {
+            setApplicationState('loading');
+            chatLog.innerHTML = '';
+            conversationHistory = [];
+            userInput.value = '';
+            userInput.style.height = 'auto';
+            const modelId = modelSelector.value;
+            
+            if (engine) {
+                statusDiv.textContent = 'Unloading previous model...';
+                await engine.unload();
+                engine = null;
+                console.log('Previous model unloaded.');
+            }
+
             try {
                 const availableIds = prebuiltAppConfig.model_list.map(m => m.model_id);
-                if (!availableIds.includes(targetModelId)) {
-                    const errorMsg = `Critical: Model ID "${targetModelId}" not in prebuilt list.`;
+                if (!availableIds.includes(modelId)) {
+                    const errorMsg = `Critical: Model ID "${modelId}" not in prebuilt list.`;
                     statusDiv.textContent = errorMsg; console.error(errorMsg); alert(errorMsg);
+                    setApplicationState('unloaded');
                     return;
                 }
                 
-                statusDiv.textContent = `Loading model: ${targetModelId}...`;
+                statusDiv.textContent = `Loading model: ${modelId}...`;
                 const initProgressCallback = (report) => { statusDiv.textContent = report.text; };
-                engine = await CreateMLCEngine(targetModelId, { initProgressCallback });
+                engine = await CreateMLCEngine(modelId, { initProgressCallback });
                 
-                statusDiv.textContent = `Model ${targetModelId} loaded! Ready.`;
-                userInput.disabled = false; 
-                sendButton.disabled = false;
-                newChatButton.disabled = false;
-                userInput.placeholder = `Ask ${botDisplayName}... (Shift+Enter for newline)`;
-                console.log("WebLLM MLCEngine initialized:", targetModelId);
+                currentlyLoadedModelId = modelId;
+                statusDiv.textContent = `Model ${modelId} loaded! Ready.`;
+                console.log("WebLLM MLCEngine initialized:", modelId);
+                setApplicationState('ready');
+                userInput.focus();
 
             } catch (err) {
                 statusDiv.textContent = `Error initializing: ${err.message}`;
                 console.error("WebLLM Init Error:", err);
-                alert(`Load failed: ${err.message}\nModel: ${targetModelId}`);
+                alert(`Load failed: ${err.message}\nModel: ${modelId}`);
+                setApplicationState('unloaded');
             }
         }
-        
+
         async function handleResetChat() {
             if (!engine) return;
             console.log("Resetting chat...");
-            userInput.disabled = true;
-            sendButton.disabled = true;
-            newChatButton.disabled = true;
+            setApplicationState('generating');
 
             chatLog.innerHTML = '';
             conversationHistory = [];
@@ -402,27 +559,44 @@
                 await engine.reset();
                 statusDiv.textContent = `Chat reset. Model is ready.`;
                 console.log("Engine chat state reset successfully.");
-            } catch (err) {
+            } catch (err)
+ {
                 console.error("Error during engine.reset():", err);
                 statusDiv.textContent = `Error resetting chat. Model is ready.`;
             } finally {
-                userInput.disabled = false;
-                sendButton.disabled = false;
-                newChatButton.disabled = false;
+                setApplicationState('ready');
                 userInput.focus();
             }
         }
 
         async function handleSendMessage() {
-            const messageText = userInput.value.trim();
+            let messageText = userInput.value.trim();
             if (!messageText || !engine) return;
 
             appendMessage(messageText, 'user');
             userInput.value = '';
             userInput.style.height = 'auto';
 
+            const isThinkingMode = thinkingModeCheckbox.checked;
+
+            let completionParams = {
+                stream: true,
+                stream_options: { include_usage: true },
+                top_k: 20,
+            };
+
+            if (isThinkingMode) {
+                completionParams.temperature = 0.7;
+                completionParams.top_p = 0.8;
+                messageText = `/think ${messageText}`;
+            } else {
+                completionParams.temperature = 0.6;
+                completionParams.top_p = 0.95;
+                messageText = `/no_think ${messageText}`;
+            }
+
             let currentMessages = [...conversationHistory, { role: "user", content: messageText }];
-            userInput.disabled = true; sendButton.disabled = true; newChatButton.disabled = true;
+            setApplicationState('generating');
 
             let botMessageWrapper = appendMessage("Thinking...", 'bot');
             let botContentWrapper = botMessageWrapper.querySelector('.bot-content-wrapper');
@@ -448,8 +622,7 @@
             try {
                 const chunks = await engine.chat.completions.create({
                     messages: currentMessages,
-                    stream: true,
-                    stream_options: { include_usage: true }
+                    ...completionParams
                 });
 
                 for await (const chunk of chunks) {
@@ -467,33 +640,41 @@
                                 const thinkCloseIndex = streamBuffer.indexOf("</think>");
                                 if (thinkCloseIndex !== -1) {
                                     const thoughtText = streamBuffer.substring(0, thinkCloseIndex);
-                                    if (currentActiveElement && currentActiveElement.classList.contains('thought-content')) {
-                                         currentActiveElement.textContent += thoughtText;
-                                    }
+                                    currentActiveElement.textContent += thoughtText;
+                                    
                                     streamBuffer = streamBuffer.substring(thinkCloseIndex + "</think>".length);
-                                    inThinkBlock = false; ensureNormalTextSpan(); processAgain = streamBuffer.length > 0;
+                                    inThinkBlock = false;
+                                    
+                                    ensureNormalTextSpan();
+                                    
+                                    processAgain = streamBuffer.length > 0;
                                 } else {
-                                    if (currentActiveElement && currentActiveElement.classList.contains('thought-content')) {
-                                         currentActiveElement.textContent += streamBuffer;
-                                    }
+                                    currentActiveElement.textContent += streamBuffer;
                                     streamBuffer = "";
                                 }
                             } else {
                                 const thinkOpenIndex = streamBuffer.indexOf("<think>");
                                 if (thinkOpenIndex !== -1) {
                                     const normalText = streamBuffer.substring(0, thinkOpenIndex);
-                                    ensureNormalTextSpan(); currentActiveElement.textContent += normalText;
+                                    ensureNormalTextSpan();
+                                    currentActiveElement.textContent += normalText;
                                     
-                                    const details = document.createElement('details'); details.classList.add('thought-block'); details.open = true;
-                                    const summary = document.createElement('summary'); 
-                                    summary.textContent = 'Show/Hide Thought Process';
-                                    const thoughtDiv = document.createElement('div'); thoughtDiv.classList.add('thought-content');
-                                    details.appendChild(summary); details.appendChild(thoughtDiv);
-                                    botContentWrapper.appendChild(details); currentActiveElement = thoughtDiv;
+                                    if (isThinkingMode) {
+                                        const details = document.createElement('details'); details.classList.add('thought-block'); details.open = true;
+                                        const summary = document.createElement('summary'); 
+                                        summary.textContent = 'Show/Hide Thought Process';
+                                        const thoughtDiv = document.createElement('div'); thoughtDiv.classList.add('thought-content');
+                                        details.appendChild(summary); details.appendChild(thoughtDiv);
+                                        botContentWrapper.appendChild(details);
+                                        currentActiveElement = thoughtDiv;
+                                    }
+                                    
                                     streamBuffer = streamBuffer.substring(thinkOpenIndex + "<think>".length);
-                                    inThinkBlock = true; processAgain = streamBuffer.length > 0;
+                                    inThinkBlock = true;
+                                    processAgain = streamBuffer.length > 0;
                                 } else {
-                                    ensureNormalTextSpan(); currentActiveElement.textContent += streamBuffer;
+                                    ensureNormalTextSpan();
+                                    currentActiveElement.textContent += streamBuffer;
                                     streamBuffer = "";
                                 }
                             }
@@ -532,20 +713,29 @@
                 ensureNormalTextSpan();
                 currentActiveElement.textContent += "\nSorry, an error occurred during generation.";
             } finally {
-                userInput.disabled = false; 
-                sendButton.disabled = false;
-                newChatButton.disabled = false;
+                setApplicationState('ready');
                 userInput.focus();
             }
         }
         
+        async function handleLoadButtonClick() {
+            const selectedModelId = modelSelector.value;
+            if (currentlyLoadedModelId && selectedModelId === currentlyLoadedModelId) {
+                await handleUnloadModel();
+            } else {
+                await initWebLLM();
+            }
+        }
+
         userInput.addEventListener('input', () => {
             userInput.style.height = 'auto';
             userInput.style.height = (userInput.scrollHeight) + 'px';
         });
-
+        
+        loadModelButton.addEventListener('click', handleLoadButtonClick);
         newChatButton.addEventListener('click', handleResetChat);
         sendButton.addEventListener('click', handleSendMessage);
+        modelSelector.addEventListener('change', updateLoadButtonState);
         userInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey && !sendButton.disabled) {
                 e.preventDefault();
@@ -553,7 +743,7 @@
             }
         });
 
-        initWebLLM();
+        setApplicationState('unloaded');
     </script>
 </body>
 </html>
