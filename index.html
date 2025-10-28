@@ -148,6 +148,34 @@
             background-color: var(--danger-hover-color);
         }
 
+        .system-prompt-container {
+            margin-top: 20px;
+        }
+
+        #system-prompt {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px 12px;
+            background-color: var(--chat-area-color);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-family: inherit;
+            line-height: 1.5;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        #system-prompt:focus {
+            border-color: var(--accent-color);
+        }
+        #system-prompt:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: #3a3c3e;
+        }
+
         .thinking-toggle {
             display: flex;
             align-items: center;
@@ -342,6 +370,12 @@
                     <option value="Qwen3-0.6B-q4f16_1-MLC">Qwen3 0.6B (Speed)</option>
                 </select>
                 <button id="load-model-button">Load Model</button>
+
+                <div class="system-prompt-container">
+                    <h3>System Prompt (Optional)</h3>
+                    <textarea id="system-prompt" rows="4" placeholder="e.g., You are a helpful assistant that always responds in pirate speech."></textarea>
+                </div>
+                
                 <div class="thinking-toggle">
                     <input type="checkbox" id="thinking-mode" name="thinking-mode">
                     <label for="thinking-mode">Enable Thinking</label>
@@ -382,6 +416,7 @@
         const modelSelector = document.getElementById('model-selector');
         const loadModelButton = document.getElementById('load-model-button');
         const thinkingModeCheckbox = document.getElementById('thinking-mode');
+        const systemPromptInput = document.getElementById('system-prompt');
 
         const botDisplayName = "E-Money LLM Sandbox";
         let engine;
@@ -413,6 +448,7 @@
                     sendButton.disabled = true;
                     newChatButton.disabled = true;
                     modelSelector.disabled = false;
+                    systemPromptInput.disabled = false; // Allow editing when unloaded
                     currentlyLoadedModelId = null;
                     updateLoadButtonState();
                     statusDiv.textContent = 'Select a model and click "Load Model"';
@@ -424,6 +460,7 @@
                     newChatButton.disabled = true;
                     modelSelector.disabled = true;
                     loadModelButton.disabled = true;
+                    systemPromptInput.disabled = true;
                     loadModelButton.classList.remove('unload-style');
                     loadModelButton.textContent = 'Loading...';
                     break;
@@ -433,12 +470,14 @@
                     newChatButton.disabled = true;
                     modelSelector.disabled = true; 
                     loadModelButton.disabled = true;
+                    systemPromptInput.disabled = true;
                     break;
                 case 'ready':
                     userInput.disabled = false;
                     sendButton.disabled = false;
                     newChatButton.disabled = false;
                     modelSelector.disabled = false;
+                    systemPromptInput.disabled = false;
                     userInput.placeholder = `Ask ${botDisplayName}...`;
                     updateLoadButtonState();
                     break;
@@ -595,7 +634,14 @@
                 messageText = `/no_think ${messageText}`;
             }
 
-            let currentMessages = [...conversationHistory, { role: "user", content: messageText }];
+            const systemPromptText = systemPromptInput.value.trim();
+            let messagesForAPI = [];
+            // Add system prompt only if the conversation is new
+            if (conversationHistory.length === 0 && systemPromptText) {
+                messagesForAPI.push({ role: "system", content: systemPromptText });
+            }
+            messagesForAPI.push(...conversationHistory, { role: "user", content: messageText });
+
             setApplicationState('generating');
 
             let botMessageWrapper = appendMessage("Thinking...", 'bot');
@@ -621,7 +667,7 @@
 
             try {
                 const chunks = await engine.chat.completions.create({
-                    messages: currentMessages,
+                    messages: messagesForAPI,
                     ...completionParams
                 });
 
