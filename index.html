@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>E-Money LLM Sandbox</title>
+    <!-- Import Marked (Markdown Parser) and DOMPurify (Sanitizer) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <style>
         :root {
             --bg-color: #1e1e20;
@@ -17,6 +20,7 @@
             --accent-color: #3a76f8;
             --danger-color: #d9534f;
             --danger-hover-color: #c9302c;
+            --code-bg: #2b2d31;
         }
 
         body {
@@ -219,7 +223,7 @@
             display: flex;
             align-items: flex-start;
             gap: 15px;
-            max-width: 70%;
+            max-width: 80%; /* Increased width for better code block display */
             word-wrap: break-word;
             line-height: 1.6;
         }
@@ -240,6 +244,7 @@
             padding: 12px 18px;
             border-radius: 18px;
             position: relative;
+            min-width: 0; /* Prevents code blocks from overflowing flex container */
         }
 
         .user-message {
@@ -251,10 +256,76 @@
 
         .bot-message {
             align-self: flex-start;
+            width: 100%; /* Allows message to take space up to max-width */
         }
         .bot-message .message-avatar { background-color: #7d8084; }
-        .bot-message .message-content { background-color: var(--message-bot-bg); border-bottom-left-radius: 6px;}
-        .bot-message > div.bot-content-wrapper { white-space: pre-wrap; }
+        .bot-message .message-content { background-color: var(--message-bot-bg); border-bottom-left-radius: 6px; width: 100%;}
+        
+        /* Markdown Styles */
+        .markdown-content {
+            font-size: 1em;
+            line-height: 1.6;
+        }
+        .markdown-content p:first-child { margin-top: 0; }
+        .markdown-content p:last-child { margin-bottom: 0; }
+        .markdown-content p { margin-bottom: 1rem; }
+        
+        .markdown-content pre {
+            background-color: var(--code-bg);
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+            font-size: 0.9em;
+            margin: 10px 0;
+            border: 1px solid var(--border-color);
+        }
+        
+        .markdown-content code {
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        
+        .markdown-content pre code {
+            background-color: transparent;
+            padding: 0;
+            border-radius: 0;
+            color: #dcdcdc;
+        }
+
+        .markdown-content ul, .markdown-content ol {
+            padding-left: 20px;
+            margin-bottom: 1rem;
+        }
+        
+        .markdown-content h1, .markdown-content h2, .markdown-content h3 {
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #fff;
+        }
+        .markdown-content h1 { font-size: 1.4em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em;}
+        .markdown-content h2 { font-size: 1.25em; }
+        .markdown-content h3 { font-size: 1.1em; }
+        
+        .markdown-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1rem 0;
+        }
+        .markdown-content th, .markdown-content td {
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            text-align: left;
+        }
+        .markdown-content th {
+            background-color: rgba(0,0,0,0.2);
+        }
+        .markdown-content a { color: var(--accent-color); }
+        .markdown-content img { max-width: 100%; border-radius: 6px; }
 
         .tps-metric {
             position: absolute;
@@ -267,7 +338,7 @@
             border-radius: 4px;
         }
 
-        .bot-message .thought-block { margin: 12px 0 5px 0; }
+        .bot-message .thought-block { margin: 12px 0 12px 0; }
         .bot-message .thought-block summary {
             cursor: pointer;
             font-weight: 600;
@@ -435,6 +506,12 @@
         let engine;
         let conversationHistory = [];
         let currentlyLoadedModelId = null;
+
+        // Configure Marked options
+        marked.use({
+            gfm: true,
+            breaks: true
+        });
 
         function updateLoadButtonState() {
             loadModelButton.classList.remove('unload-style');
@@ -673,18 +750,29 @@
 
             let botReplyFullText = "";
             let streamBuffer = "";
+            let accumulatedNormalText = ""; // To hold the normal text for Markdown parsing
             let inThinkBlock = false;
             let currentActiveElement = null;
             let startTime = 0;
 
-            function ensureNormalTextSpan() {
-                if (!currentActiveElement || currentActiveElement.tagName !== 'SPAN' || currentActiveElement.parentElement !== botContentWrapper) {
-                    const newSpan = document.createElement('span');
-                    botContentWrapper.appendChild(newSpan);
-                    currentActiveElement = newSpan;
+            // Helper to ensure we have a DIV for markdown content
+            function ensureMarkdownContainer() {
+                if (!currentActiveElement || !currentActiveElement.classList.contains('markdown-content') || currentActiveElement.parentElement !== botContentWrapper) {
+                    const newDiv = document.createElement('div');
+                    newDiv.classList.add('markdown-content');
+                    botContentWrapper.appendChild(newDiv);
+                    currentActiveElement = newDiv;
                 }
             }
-            ensureNormalTextSpan();
+            
+            // Helper to ensure we have a PRE/DIV for thought content
+            function ensureThoughtContainer() {
+                 if (!currentActiveElement || !currentActiveElement.classList.contains('thought-content')) {
+                     // logic handled in the main loop for creating details/summary/div
+                 }
+            }
+
+            ensureMarkdownContainer();
 
             try {
                 const chunks = await engine.chat.completions.create({
@@ -707,12 +795,12 @@
                                 const thinkCloseIndex = streamBuffer.indexOf("</think>");
                                 if (thinkCloseIndex !== -1) {
                                     const thoughtText = streamBuffer.substring(0, thinkCloseIndex);
-                                    currentActiveElement.textContent += thoughtText;
+                                    currentActiveElement.textContent += thoughtText; // Thoughts stay as plain text
                                     
                                     streamBuffer = streamBuffer.substring(thinkCloseIndex + "</think>".length);
                                     inThinkBlock = false;
                                     
-                                    ensureNormalTextSpan();
+                                    ensureMarkdownContainer();
                                     
                                     processAgain = streamBuffer.length > 0;
                                 } else {
@@ -723,8 +811,11 @@
                                 const thinkOpenIndex = streamBuffer.indexOf("<think>");
                                 if (thinkOpenIndex !== -1) {
                                     const normalText = streamBuffer.substring(0, thinkOpenIndex);
-                                    ensureNormalTextSpan();
-                                    currentActiveElement.textContent += normalText;
+                                    
+                                    // Render accumulated normal text
+                                    ensureMarkdownContainer();
+                                    accumulatedNormalText += normalText;
+                                    currentActiveElement.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedNormalText));
                                     
                                     if (isThinkingMode) {
                                         const details = document.createElement('details'); details.classList.add('thought-block'); details.open = true;
@@ -740,8 +831,10 @@
                                     inThinkBlock = true;
                                     processAgain = streamBuffer.length > 0;
                                 } else {
-                                    ensureNormalTextSpan();
-                                    currentActiveElement.textContent += streamBuffer;
+                                    ensureMarkdownContainer();
+                                    accumulatedNormalText += streamBuffer;
+                                    // Parse Markdown and Sanitize
+                                    currentActiveElement.innerHTML = DOMPurify.sanitize(marked.parse(accumulatedNormalText));
                                     streamBuffer = "";
                                 }
                             }
@@ -770,7 +863,7 @@
                 if (botReplyFullText) {
                     conversationHistory.push({ role: "user", content: messageText });
                     
-                    // FIX: Remove <think> blocks from history so the model doesn't get confused 
+                    // Remove <think> blocks from history so the model doesn't get confused 
                     // by its own previous internal monologue in the next turn.
                     const cleanBotReply = botReplyFullText.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 
@@ -782,13 +875,13 @@
                     });
 
                 } else if (botContentWrapper.innerHTML === '') {
-                     ensureNormalTextSpan();
+                     ensureMarkdownContainer();
                      currentActiveElement.textContent = "[No response generated]";
                 }
             } catch (err) {
                 console.error("Generation Error:", err);
                 if (tpsDisplayElement) tpsDisplayElement.textContent = "Error";
-                ensureNormalTextSpan();
+                ensureMarkdownContainer();
                 currentActiveElement.textContent += "\nSorry, an error occurred during generation.";
             } finally {
                 setApplicationState('ready');
