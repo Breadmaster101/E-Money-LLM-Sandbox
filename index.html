@@ -462,7 +462,7 @@
                     newChatButton.disabled = true;
                     modelSelector.disabled = false;
                     contextSelector.disabled = false;
-                    systemPromptInput.disabled = false; // Allow editing when unloaded
+                    systemPromptInput.disabled = false;
                     currentlyLoadedModelId = null;
                     updateLoadButtonState();
                     statusDiv.textContent = 'Select a model and click "Load Model"';
@@ -646,12 +646,12 @@
             };
 
             if (isThinkingMode) {
-                completionParams.temperature = 0.7;
-                completionParams.top_p = 0.8;
-                messageText = `/think ${messageText}`;
-            } else {
                 completionParams.temperature = 0.6;
                 completionParams.top_p = 0.95;
+                messageText = `/think ${messageText}`;
+            } else {
+                completionParams.temperature = 0.7;
+                completionParams.top_p = 0.8;
                 messageText = `/no_think ${messageText}`;
             }
 
