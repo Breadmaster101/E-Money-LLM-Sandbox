@@ -97,7 +97,7 @@
             margin: 0 0 10px 0;
         }
         
-        #model-selector {
+        #model-selector, #context-selector {
             width: 100%;
             padding: 8px 12px;
             background-color: var(--chat-area-color);
@@ -116,7 +116,7 @@
             margin-bottom: 12px;
         }
 
-        #model-selector:disabled {
+        #model-selector:disabled, #context-selector:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             background-color: #3a3c3e;
@@ -376,6 +376,18 @@
                     <textarea id="system-prompt" rows="4" placeholder="e.g., You are a helpful assistant that always responds in pirate speech."></textarea>
                 </div>
                 
+                <div class="system-prompt-container">
+                    <h3>Context Window</h3>
+                    <select id="context-selector">
+                        <option value="1024">1024</option>
+                        <option value="2048">2048</option>
+                        <option value="4096" selected>4096</option>
+                        <option value="8192">8192</option>
+                        <option value="16000">16000</option>
+                        <option value="32000">32000</option>
+                    </select>
+                </div>
+
                 <div class="thinking-toggle">
                     <input type="checkbox" id="thinking-mode" name="thinking-mode">
                     <label for="thinking-mode">Enable Thinking</label>
@@ -414,6 +426,7 @@
         const sendButton = document.getElementById('send-button');
         const newChatButton = document.getElementById('new-chat-button');
         const modelSelector = document.getElementById('model-selector');
+        const contextSelector = document.getElementById('context-selector');
         const loadModelButton = document.getElementById('load-model-button');
         const thinkingModeCheckbox = document.getElementById('thinking-mode');
         const systemPromptInput = document.getElementById('system-prompt');
@@ -448,6 +461,7 @@
                     sendButton.disabled = true;
                     newChatButton.disabled = true;
                     modelSelector.disabled = false;
+                    contextSelector.disabled = false;
                     systemPromptInput.disabled = false; // Allow editing when unloaded
                     currentlyLoadedModelId = null;
                     updateLoadButtonState();
@@ -459,6 +473,7 @@
                     sendButton.disabled = true;
                     newChatButton.disabled = true;
                     modelSelector.disabled = true;
+                    contextSelector.disabled = true;
                     loadModelButton.disabled = true;
                     systemPromptInput.disabled = true;
                     loadModelButton.classList.remove('unload-style');
@@ -469,6 +484,7 @@
                     sendButton.disabled = true;
                     newChatButton.disabled = true;
                     modelSelector.disabled = true; 
+                    contextSelector.disabled = true;
                     loadModelButton.disabled = true;
                     systemPromptInput.disabled = true;
                     break;
@@ -477,6 +493,7 @@
                     sendButton.disabled = false;
                     newChatButton.disabled = false;
                     modelSelector.disabled = false;
+                    contextSelector.disabled = false;
                     systemPromptInput.disabled = false;
                     userInput.placeholder = `Ask ${botDisplayName}...`;
                     updateLoadButtonState();
@@ -551,6 +568,7 @@
             userInput.value = '';
             userInput.style.height = 'auto';
             const modelId = modelSelector.value;
+            const contextSize = parseInt(contextSelector.value);
             
             if (engine) {
                 statusDiv.textContent = 'Unloading previous model...';
@@ -568,9 +586,12 @@
                     return;
                 }
                 
-                statusDiv.textContent = `Loading model: ${modelId}...`;
+                statusDiv.textContent = `Loading model: ${modelId} (ctx: ${contextSize})...`;
                 const initProgressCallback = (report) => { statusDiv.textContent = report.text; };
-                engine = await CreateMLCEngine(modelId, { initProgressCallback });
+                engine = await CreateMLCEngine(modelId, { 
+                    initProgressCallback,
+                    context_window_size: contextSize
+                });
                 
                 currentlyLoadedModelId = modelId;
                 statusDiv.textContent = `Model ${modelId} loaded! Ready.`;
