@@ -648,11 +648,11 @@
             if (isThinkingMode) {
                 completionParams.temperature = 0.6;
                 completionParams.top_p = 0.95;
-                messageText = `/think ${messageText}`;
+                messageText = `${messageText} /think`;
             } else {
                 completionParams.temperature = 0.7;
                 completionParams.top_p = 0.8;
-                messageText = `/no_think ${messageText}`;
+                messageText = `${messageText} /no_think`;
             }
 
             const systemPromptText = systemPromptInput.value.trim();
@@ -769,7 +769,18 @@
 
                 if (botReplyFullText) {
                     conversationHistory.push({ role: "user", content: messageText });
-                    conversationHistory.push({ role: "assistant", content: botReplyFullText });
+                    
+                    // FIX: Remove <think> blocks from history so the model doesn't get confused 
+                    // by its own previous internal monologue in the next turn.
+                    const cleanBotReply = botReplyFullText.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+
+                    // If the model *only* thought (cleanReply is empty), keep the original to avoid errors,
+                    // otherwise store the clean response.
+                    conversationHistory.push({ 
+                        role: "assistant", 
+                        content: cleanBotReply.length > 0 ? cleanBotReply : botReplyFullText 
+                    });
+
                 } else if (botContentWrapper.innerHTML === '') {
                      ensureNormalTextSpan();
                      currentActiveElement.textContent = "[No response generated]";
